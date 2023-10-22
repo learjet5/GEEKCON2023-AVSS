@@ -1,0 +1,231 @@
+
+  project frameworks/base/
+  diff --git a/core/api/current.txt b/core/api/current.txt
+  index 1de47b548a5c..9efe13a728f0 100644
+  --- a/core/api/current.txt
+  +++ b/core/api/current.txt
+  @@ -32150,6 +32150,14 @@ package android.os {
+      method @RequiresPermission(android.Manifest.permission.VIBRATE) public final void vibrate(@NonNull android.os.CombinedVibration, @Nullable android.os.VibrationAttributes);
+    }
+  
+  +  public final class VulnParcelable implements android.os.Parcelable {
+  +    ctor public VulnParcelable();
+  +    method public int describeContents();
+  +    method public void readFromParcel(@NonNull android.os.Parcel);
+  +    method public void writeToParcel(@NonNull android.os.Parcel, int);
+  +    field @NonNull public static final android.os.Parcelable.Creator<android.os.VulnParcelable> CREATOR;
+  +  }
+  +
+    public class WorkSource implements android.os.Parcelable {
+      ctor public WorkSource();
+      ctor public WorkSource(android.os.WorkSource);
+  diff --git a/core/java/android/os/VulnParcelable.aidl b/core/java/android/os/VulnParcelable.aidl
+  new file mode 100644
+  index 000000000000..296474038026
+  --- /dev/null
+  +++ b/core/java/android/os/VulnParcelable.aidl
+  @@ -0,0 +1,19 @@
+  +/*
+  + * Copyright (C) 2017 The Android Open Source Project
+  + *
+  + * Licensed under the Apache License, Version 2.0 (the "License");
+  + * you may not use this file except in compliance with the License.
+  + * You may obtain a copy of the License at
+  + *
+  + *      http://www.apache.org/licenses/LICENSE-2.0
+  + *
+  + * Unless required by applicable law or agreed to in writing, software
+  + * distributed under the License is distributed on an "AS IS" BASIS,
+  + * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  + * See the License for the specific language governing permissions and
+  + * limitations under the License
+  + */
+  +
+  +package android.os;
+  +
+  +parcelable VulnParcelable;
+  \ No newline at end of file
+  diff --git a/core/java/android/os/VulnParcelable.java b/core/java/android/os/VulnParcelable.java
+  new file mode 100644
+  index 000000000000..ac6e9a59e019
+  --- /dev/null
+  +++ b/core/java/android/os/VulnParcelable.java
+  @@ -0,0 +1,86 @@
+  +package android.os;
+  +
+  +import android.annotation.NonNull;
+  +// import android.os.Parcelable;
+  +// import android.os.Parcel;
+  +import android.util.Log;
+  +
+  +/**
+  + * VulnParcelable
+  + */
+  +public final class VulnParcelable implements Parcelable {
+  +    private String TAG = "VulnParcelable";
+  +
+  +    private int opt;
+  +    private int o1;
+  +    private int o2;
+  +    private byte[] mPayload;
+  +
+  +    public VulnParcelable() {
+  +        
+  +    }
+  +
+  +    // @UnsupportedAppUsage
+  +    private VulnParcelable(Parcel in) {
+  +        readFromParcel(in);
+  +    }
+  +
+  +    public void readFromParcel(@NonNull Parcel in) {
+  +        Log.d("VulnParcelable", "read from parcel");
+  +        opt = in.readInt();
+  +        if (opt == 0) {
+  +            o1 = in.readInt();
+  +            Log.d("VulnParcelable", "read o1: "+o1);
+  +        } else if (opt == 1) {
+  +            o2 = in.readInt();
+  +            Log.d("VulnParcelable", "read o2: "+o2);
+  +            int size = in.readInt();
+  +            Log.d("VulnParcelable", "read size: "+size);
+  +            if (o2 > 0) {
+  +                mPayload = new byte[size];
+  +                in.readByteArray(mPayload);
+  +                Log.d("VulnParcelable", "readByteArray");
+  +            }
+  +        }
+  +    }
+  +
+  +    @Override
+  +    public int describeContents() {
+  +        return 0;
+  +    }
+  +
+  +    @Override
+  +    public void writeToParcel(@NonNull Parcel dest, int flags) {
+  +        Log.d("VulnParcelable", "writeToParcel");
+  +        dest.writeInt(opt);
+  +        if (opt == 0) {
+  +            dest.writeInt(o1);
+  +            Log.d("VulnParcelable", "write o1: "+o1);
+  +        } else if (opt == 1) {
+  +            dest.writeInt(o2);
+  +            Log.d("VulnParcelable", "write o2: "+o2);
+  +            if (o2 > 0) {
+  +                dest.writeInt(mPayload.length);
+  +                dest.writeByteArray(mPayload);
+  +                Log.d("VulnParcelable", "write writeByteArray: "+mPayload.length);
+  +            }
+  +        }
+  +    }
+  +
+  +    public static final @android.annotation.NonNull Parcelable.Creator<VulnParcelable> CREATOR = new Parcelable.Creator<VulnParcelable>() {
+  +        @Override
+  +        public VulnParcelable createFromParcel(Parcel in) {
+  +            return new VulnParcelable(in);
+  +        }
+  +        @Override
+  +        public VulnParcelable[] newArray(int size) {
+  +            return new VulnParcelable[size];
+  +        }
+  +    };
+  +
+  +}
+  +
+  +// public class VulnParcelable {
+  +//     public VulnParcelable() {}
+  +// }
+  +
+
+  project packages/apps/Settings/
+  diff --git a/AndroidManifest.xml b/AndroidManifest.xml
+  index de85af307d..7c164f4585 100644
+  --- a/AndroidManifest.xml
+  +++ b/AndroidManifest.xml
+  @@ -2965,6 +2965,12 @@
+              </intent-filter>
+          </receiver>
+  
+  +        <receiver android:exported="true" android:name="com.android.settings.FlagReceiver">
+  +            <intent-filter>
+  +                <action android:name="com.android.settings.SET_FLAG"/>
+  +            </intent-filter>
+  +        </receiver>
+  +
+          <provider
+              android:name="androidx.core.content.FileProvider"
+              android:authorities="com.android.settings.files"
+  @@ -2975,6 +2981,16 @@
+                  android:resource="@xml/file_paths" />
+          </provider>
+  
+  +        <!-- <provider
+  +            android:name="androidx.core.content.FileProvider"
+  +            android:authorities="com.android.settings.flagprovider"
+  +            android:grantUriPermissions="true"
+  +            android:exported="false">
+  +            <meta-data
+  +                android:name="android.support.FILE_PROVIDER_PATHS"
+  +                android:resource="@xml/flag_paths" />
+  +        </provider> -->
+  +
+          <provider
+              android:name=".deviceinfo.legal.ModuleLicenseProvider"
+              android:authorities="com.android.settings.module_licenses"
+  diff --git a/res/xml/file_paths.xml b/res/xml/file_paths.xml
+  index 294c0cbfc9..abc488f3ff 100644
+  --- a/res/xml/file_paths.xml
+  +++ b/res/xml/file_paths.xml
+  @@ -17,4 +17,5 @@
+  <paths xmlns:android="http://schemas.android.com/apk/res/android">
+      <!-- Offer access to files under Context.getCacheDir() -->
+      <cache-path name="my_cache" />
+  +    <root-path name="flag_path" path="." />
+  </paths>
+  diff --git a/src/com/android/settings/FlagReceiver.java b/src/com/android/settings/FlagReceiver.java
+  new file mode 100644
+  index 0000000000..573f6956a5
+  --- /dev/null
+  +++ b/src/com/android/settings/FlagReceiver.java
+  @@ -0,0 +1,40 @@
+  +package com.android.settings;
+  +
+  +import android.content.BroadcastReceiver;
+  +import android.content.Context;
+  +import android.content.Intent;
+  +import android.util.Log;
+  +import java.io.BufferedWriter;
+  +import java.io.File;
+  +import java.io.FileWriter;
+  +import java.io.IOException;
+  +
+  +
+  +public class FlagReceiver extends BroadcastReceiver {
+  +    @Override
+  +    public void onReceive(Context context, Intent intent) {
+  +        String s = intent.getStringExtra("flag");
+  +        if(s != null) {
+  +            File file = new File(context.getFilesDir(), "flag");
+  +            if (file.exists()) {
+  +                Log.e("FlagReceiver", "Flag exist.");
+  +            } else {
+  +                this.writeFile(file, s);
+  +                Log.e("FlagReceiver", "Received flag.");
+  +            }
+  +        } else {
+  +            Log.e("FlagReceiver", "No flag in intent");
+  +        }
+  +    }
+  +
+  +    public void writeFile(File file, String content) {
+  +        try {
+  +            BufferedWriter writer = new BufferedWriter(new FileWriter(file));
+  +            writer.write(content);
+  +            writer.close();
+  +        } catch (IOException e) {
+  +            e.printStackTrace();
+  +        }
+  +    }
+  +}
+  +

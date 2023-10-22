@@ -1,0 +1,1 @@
+Effective for Android12.
